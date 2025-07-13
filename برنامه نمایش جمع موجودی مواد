@@ -1,0 +1,127 @@
+*& Report  ZTEST_SAMPLE_PROGRAM
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT ZTEST_SAMPLE_PROGRAM.
+
+TABLES: mara.
+
+" FIX: Dash '-' not allowed in variable names in Unicode programs. Use underscore '_'
+SELECT-OPTIONS: s_mtart FOR mara-mtart.
+
+TYPES: BEGIN OF ty_mat_tab,
+         matnr    TYPE mard-matnr,
+         maktx    TYPE makt-maktx,
+         werks    TYPE mard-werks,
+         labst      TYPE mard-labst,
+       END OF ty_mat_tab.
+
+" FIX: Use 'TYPE STANDARD TABLE OF' instead of 'LIKE TABLE OF' with a structure
+DATA: itab_mat_tab TYPE TABLE OF ty_mat_tab,
+      wa_mat_tab TYPE ty_mat_tab.
+
+
+
+
+data: fieldcatalog type slis_t_fieldcat_alv,
+      wa_fcat like LINE OF fieldcatalog,
+      gd_layout type slis_layout_alv,
+      gd_repid like sy-repid,
+      g_variant type disvariant.
+
+
+
+START-OF-SELECTION.
+
+  PERFORM get_data.
+
+  PERFORM DISPLAY.
+
+
+FORM get_data.
+
+
+  DATA: sum_mat_tab TYPE STANDARD TABLE OF ty_mat_tab,
+        wa_temp_tab    LIKE wa_mat_tab.
+
+
+
+  " FIX: Ensure all selected fields match those in wa_mat_tab
+  SELECT mard~matnr makt~maktx mard~werks mard~labst
+    INTO CORRESPONDING FIELDS OF TABLE itab_mat_tab
+     FROM mara
+     INNER JOIN makt ON mara~matnr = makt~matnr
+     INNER JOIN mard ON mara~matnr = mard~matnr
+     WHERE mara~mtart IN s_mtart and makt~spras = sy-langu.
+
+  " FIX: Move the selected data into final internal table
+*  APPEND wa_temp_tab TO itab_mat_tab.
+
+
+  LOOP AT itab_mat_tab INTO wa_mat_tab.
+    COLLECT wa_mat_tab INTO sum_mat_tab.
+  ENDLOOP.
+
+  CLEAR itab_mat_tab.
+  itab_mat_tab = sum_mat_tab.
+
+ENDFORM.
+
+
+
+FORM DISPLAY .
+
+  PERFORM fieldcat.
+
+  perform alv_display.
+
+ENDFORM.                    " DISPLAY
+
+
+
+
+FORM FIELDCAT .
+
+  wa_fcat-fieldname = 'MATNR'.
+  wa_fcat-seltext_m = 'Material Num'.
+  wa_fcat-key = 'X'.
+  APPEND wa_fcat TO fieldcatalog.
+
+  CLEAR wa_fcat.
+  wa_fcat-fieldname = 'MAKTX'.
+  wa_fcat-seltext_m = 'Material Desc'.
+  APPEND wa_fcat TO fieldcatalog.
+
+  CLEAR wa_fcat.
+  wa_fcat-fieldname = 'WERKS'.
+  wa_fcat-seltext_m = 'Plant'.
+  APPEND wa_fcat TO fieldcatalog.
+
+  CLEAR wa_fcat.
+  wa_fcat-fieldname = 'LABST'.
+  wa_fcat-seltext_m = 'Stock'.
+  APPEND wa_fcat TO fieldcatalog.
+
+
+ENDFORM.                    " FIELDCAT
+
+
+
+
+FORM ALV_DISPLAY .
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      I_CALLBACK_PROGRAM = sy-repid
+      IT_FIELDCAT        = FIELDCATALOG[]
+      I_SAVE             = 'X'
+    TABLES
+      T_OUTTAB           = itab_mat_tab
+    EXCEPTIONS
+      PROGRAM_ERROR      = 1
+      OTHERS             = 2.
+
+ENDFORM.                    " ALV_DISPLAY
